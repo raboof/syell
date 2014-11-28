@@ -1,0 +1,59 @@
+The tried-and-tested combination of terminal emulator, shell and command-line
+tools is an immensely powerful tool. However, it does come with its limitations.
+
+This repo contains some playful experiments to see what becomes possible when
+we take apart these components and try to recombine them in different ways.
+
+overrideexecve.so
+=================
+
+While the command line is an awesome way to, issue and combine commands, the 
+output can come in all kinds of different ways:
+
+* no output
+* a few lines of feedback
+* spawning a GUI
+* starting an interactive CLI
+* starting an ncurses UI
+* flood your terminal with hundreds of lines of output
+
+It would be nice to have some more control here. 'overrideexecve.so' 
+monkey-patches bash (not tested with other shells) through LD_PRELOAD
+to send any commands' output to another terminal instead of the one where
+bash was started.
+
+Limitations: currently does not set the 'controlling terminal', which is 
+visible when using commands that use /dev/tty like 'ps' or 'resize'. 
+Interestingly I haven't found any 'real' applications that are actually 
+affected by this though.
+
+Plans: 
+* instead sending all output to a specific TTY, come up with some IPC
+mechanism to ask some kind of 'TTY broker' for a TTY to connect to for each
+command.
+* use /bin/echo instead of builtin 'echo'
+
+shell.py
+========
+
+Starts 2 terminals and starts bash in one of them, but uses overrideexecve.so 
+to cause any application output to be presented in the other one.
+
+Plans: 
+* better support for resizing
+* shutdown 
+* focus handling
+* find/use a 'terminal component' instead of xterm
+
+detach
+======
+
+Optionally print your tty to a given file, then close stdin and sleep 
+indefinitely. This is executed in a 'target' xterm to free it up so other
+apps can be attached to it.
+
+isatty
+======
+
+diagnostic tool that tells us whether it thinks its output is a tty
+
