@@ -1,12 +1,14 @@
 #!/usr/bin/env python
 #-*- coding:utf-8 -*-
 
-import sys, os, time, pyinotify
+import sys, os, time, pyinotify, signal
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 
 from PyQt4 import Qt
 import QTermWidget
+
+signal.signal(signal.SIGINT, signal.SIG_DFL)
 
 def get_contents(filename):
     with file(filename) as f:
