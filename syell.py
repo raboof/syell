@@ -1,35 +1,54 @@
 #!/usr/bin/env python
 #-*- coding:utf-8 -*-
 
-import sys, os, time, pyinotify, signal
+import sys, os, time, pyinotify, signal, socket, threading
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 
 from PyQt4 import Qt
 import QTermWidget
 
+from SocketServer import BaseRequestHandler, TCPServer
+
 signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+# TODO discover a random free port to listen on
+broker_port = 12351
+tty_device_file = "uninitialized"
 
 def get_contents(filename):
     with file(filename) as f:
         return f.read()
 
+class TtyBroker(BaseRequestHandler):
+    def handle(self):
+        requestheader = self.request.recv(1)
+        response = tty_device_file
+        responseheader = chr(len(response))
+
+        self.request.sendall(responseheader)
+        self.request.sendall(response)
+        self.request.close()
+
 class EventHandler(pyinotify.ProcessEvent):
-    def __init__(self, ttyfile, termWidget):
+    def __init__(self, ttyfile):
         self.ttyfile = ttyfile
-        self.termWidget = termWidget
+
+    def startbroker(self, ttydevice):
+        # TODO find a proper way to tell the broker which device it should respond with..
+        global tty_device_file
+        tty_device_file = ttydevice
+        
+        server = TCPServer(('',broker_port), TtyBroker)
+        thread = threading.Thread(target=server.serve_forever)
+        thread.start()
 
     def process_IN_CREATE(self, event):
         if event.pathname.endswith(self.ttyfile):
             print "created:", event.pathname
             tty = get_contents(self.ttyfile)
             print(tty)
-
-            env = QProcessEnvironment.systemEnvironment()
-            env.insert("LD_PRELOAD", "./overrideexecve.so")
-            env.insert("CQRSH_PTY", tty)
-            self.termWidget.setEnvironment(env.toStringList())
-            self.termWidget.startShellProgram()
+            self.startbroker(tty)
 
 class syell(QWidget):
 
@@ -51,13 +70,19 @@ class syell(QWidget):
         print(ttyfile)
 
         wm = pyinotify.WatchManager()
-        notifier = pyinotify.ThreadedNotifier(wm, EventHandler(ttyfile, self.shellterm))
+        notifier = pyinotify.ThreadedNotifier(wm, EventHandler(ttyfile))
         notifier.start()
         wm.add_watch('.', pyinotify.IN_CREATE, rec=True)
 
         self.outputterm.setShellProgram('./detach')
         self.outputterm.setArgs([ttyfile])
         self.outputterm.startShellProgram()
+
+        env = QProcessEnvironment.systemEnvironment()
+        env.insert("LD_PRELOAD", "./overrideexecve.so")
+        env.insert("TTY_BROKER_PORT", str(broker_port))
+        self.shellterm.setEnvironment(env.toStringList())
+        self.shellterm.startShellProgram()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
