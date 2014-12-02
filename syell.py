@@ -45,9 +45,7 @@ class EventHandler(pyinotify.ProcessEvent):
 
     def process_IN_CREATE(self, event):
         if event.pathname.endswith(self.ttyfile):
-            print "created:", event.pathname
             tty = get_contents(self.ttyfile)
-            print(tty)
             self.startbroker(tty)
 
 class syell(QWidget):
@@ -67,7 +65,6 @@ class syell(QWidget):
         ttyfile = 'tty-%d.txt' % os.getpid()
 	if (os.path.exists(ttyfile)):
             os.remove(ttyfile)
-        print(ttyfile)
 
         wm = pyinotify.WatchManager()
         notifier = pyinotify.ThreadedNotifier(wm, EventHandler(ttyfile))

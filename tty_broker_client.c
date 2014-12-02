@@ -36,12 +36,10 @@ int connect_to_broker(int port) {
   tty_broker.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
   tty_broker.sin_port = htons(port);
 
-  fprintf(stderr, "connecting\n");
   if (connect(sock, (struct sockaddr *) &tty_broker, sizeof(tty_broker)) < 0) {
     perror("Could not connect");
     return -1;
   }
-  fprintf(stderr, "connected\n");
   return sock;
 }
 
