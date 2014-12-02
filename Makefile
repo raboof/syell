@@ -3,14 +3,19 @@ all: detach isatty overrideexecve.so
 .PHONY: clean
 
 clean:
-	@rm isatty detach overrideexecve.so || true
+	@rm isatty detach overrideexecve.so *.o || true
 	@rm tty-*.txt || true
 
+CFLAGS=-Wall -fPIC
+
 isatty: isatty.c
-	gcc -Wall isatty.c -o isatty
+	$(CC) $(CFLAGS) isatty.c -o isatty
 
 detach: detach.c
-	gcc -Wall detach.c -o detach
+	$(CC) $(CFLAGS) detach.c -o detach
 
-overrideexecve.so: overrideexecve.c
-	gcc -Wall -fPIC -o overrideexecve.so -shared overrideexecve.c -pthread -ldl
+%.o : %.c
+	$(CC) -c $(CFLAGS) $< -o $@
+
+overrideexecve.so: overrideexecve.o tty_redirect.o tty_broker_client.o
+	$(CC) -fPIC -o $@ -shared $^ -pthread -ldl
