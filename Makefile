@@ -13,4 +13,4 @@ detach: detach.c
 	gcc -Wall detach.c -o detach
 
 overrideexecve.so: overrideexecve.c
-	gcc -Wall -fPIC -o overrideexecve.so -shared overrideexecve.c -pthread -ldl -ljack
+	gcc -Wall -fPIC -o overrideexecve.so -shared overrideexecve.c -pthread -ldl
