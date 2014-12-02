@@ -33,7 +33,7 @@ mechanism to ask some kind of 'TTY broker' for a TTY to connect to for each
 command.
 * use /bin/echo instead of builtin 'echo'
 
-shell.py
+syell.py
 ========
 
 Starts 2 terminals and starts bash in one of them, using overrideexecve.so

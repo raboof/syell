@@ -31,7 +31,7 @@ class EventHandler(pyinotify.ProcessEvent):
             self.termWidget.setEnvironment(env.toStringList())
             self.termWidget.startShellProgram()
 
-class embterminal(QWidget):
+class syell(QWidget):
 
     def __init__(self):
         QWidget.__init__(self)
@@ -61,8 +61,7 @@ class embterminal(QWidget):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    main = embterminal()
+    main = syell()
     main.show()
-    print("showed")
     main.startterminals()
     sys.exit(app.exec_())
