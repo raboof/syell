@@ -36,14 +36,16 @@ command.
 shell.py
 ========
 
-Starts 2 terminals and starts bash in one of them, but uses overrideexecve.so 
-to cause any application output to be presented in the other one.
+Starts 2 terminals and starts bash in one of them, using overrideexecve.so
+to cause any application output to be presented in the other terminal.
+
+This project uses some extensions to the qtermwidget component as published
+at https://github.com/raboof/qtermwidget
 
 Plans: 
-* better support for resizing
-* shutdown 
-* focus handling
-* find/use a 'terminal component' instead of xterm
+* shutdown when bash exits
+* better focus handling
+* starting new output terminals upon request
 
 detach
 ======

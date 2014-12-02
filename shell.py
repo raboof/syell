@@ -15,10 +15,9 @@ def get_contents(filename):
         return f.read()
 
 class EventHandler(pyinotify.ProcessEvent):
-    def __init__(self, ttyfile, ttyWinId, shellprocess):
+    def __init__(self, ttyfile, termWidget):
         self.ttyfile = ttyfile
-        self.ttyWinId = ttyWinId
-        self.shellprocess = shellprocess
+        self.termWidget = termWidget
 
     def process_IN_CREATE(self, event):
         if event.pathname.endswith(self.ttyfile):
@@ -29,34 +28,36 @@ class EventHandler(pyinotify.ProcessEvent):
             env = QProcessEnvironment.systemEnvironment()
             env.insert("LD_PRELOAD", "./overrideexecve.so")
             env.insert("CQRSH_PTY", tty)
-
-            self.shellprocess.setProcessEnvironment(env)
-            self.shellprocess.start('xterm',['-into', self.ttyWinId])
+            self.termWidget.setEnvironment(env.toStringList())
+            self.termWidget.startShellProgram()
 
 class embterminal(QWidget):
 
     def __init__(self):
         QWidget.__init__(self)
-        self.terminal = QWidget(self)
-        self.shellwidget = QWidget(self)
+        self.outputterm = QTermWidget.QTermWidget(0, self)
+        self.outputterm.setTerminalFont(QFont('DejaVu Sans Mono', 18))
+        self.shellterm = QTermWidget.QTermWidget(0, self)
+        self.shellterm.setTerminalFont(QFont('DejaVu Sans', 18))
         layout = QVBoxLayout(self)
-        layout.addWidget(self.terminal)
-        layout.addWidget(self.shellwidget)
+        layout.addWidget(self.outputterm)
+        layout.addWidget(self.shellterm)
 
     def startterminals(self):
         self.process = QProcess(self)
-        self.shellprocess = QProcess(self)
         ttyfile = 'tty-%d.txt' % os.getpid()
 	if (os.path.exists(ttyfile)):
             os.remove(ttyfile)
         print(ttyfile)
 
         wm = pyinotify.WatchManager()
-        notifier = pyinotify.ThreadedNotifier(wm, EventHandler(ttyfile, str(self.shellwidget.winId()), self.shellprocess))
+        notifier = pyinotify.ThreadedNotifier(wm, EventHandler(ttyfile, self.shellterm))
         notifier.start()
         wm.add_watch('.', pyinotify.IN_CREATE, rec=True)
 
-        self.process.start('xterm',['-hold', '-into', str(self.terminal.winId()), '-e', './detach', ttyfile])
+        self.outputterm.setShellProgram('./detach')
+        self.outputterm.setArgs([ttyfile])
+        self.outputterm.startShellProgram()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
