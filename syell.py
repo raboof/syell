@@ -46,6 +46,7 @@ class EventHandler(pyinotify.ProcessEvent):
     def process_IN_CREATE(self, event):
         if event.pathname.endswith(self.ttyfile):
             tty = get_contents(self.ttyfile)
+            os.remove(self.ttyfile)
             self.startbroker(tty)
 
     def stop(self):
