@@ -74,6 +74,13 @@ class TargetTerminalWidget(QTermWidget.QTermWidget):
         self.setArgs([ttyfile])
         self.startShellProgram()
 
+        self.setMonitorActivity(1)
+        self.connect(self, SIGNAL('activity()'), self.active)
+
+    def active(self):
+        self.setMonitorActivity(1)
+        self.setFocus()
+
     def stop(self):
         self.notifier.stop()
 
@@ -88,6 +95,13 @@ class ShellTerminalWidget(QTermWidget.QTermWidget):
         self.setTerminalFont(QFont('DejaVu Sans', 18))
         self.setEnvironment(env.toStringList())
         self.startShellProgram()
+
+        self.connect(self, SIGNAL('activity()'), self.active)
+        self.setMonitorActivity(1)
+
+    def active(self):
+        self.setMonitorActivity(1)
+        self.setFocus()
 
 class syell(QWidget):
 
