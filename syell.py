@@ -20,9 +20,11 @@ def get_contents(filename):
     with file(filename) as f:
         return f.read()
 
-class TtyBroker(BaseRequestHandler):
+class TtyRequestHandler(BaseRequestHandler):
     def handle(self):
         requestheader = self.request.recv(1)
+        # TODO start a new terminal as needed, then wait until it's created
+        # and return its tty device file
         response = tty_device_file
         responseheader = chr(len(response))
 
@@ -30,42 +32,34 @@ class TtyBroker(BaseRequestHandler):
         self.request.sendall(response)
         self.request.close()
 
-class EventHandler(pyinotify.ProcessEvent):
-    def __init__(self, ttyfile):
-        self.ttyfile = ttyfile
-
-    def startbroker(self, ttydevice):
-        # TODO find a proper way to tell the broker which device it should respond with..
-        global tty_device_file
-        tty_device_file = ttydevice
-        
-        self.server = TCPServer(('',broker_port), TtyBroker)
+class TtyBroker:
+    def __init__(self):
+        self.server = TCPServer(('',broker_port), TtyRequestHandler)
         thread = threading.Thread(target=self.server.serve_forever)
         thread.start()
-
-    def process_IN_CREATE(self, event):
-        if event.pathname.endswith(self.ttyfile):
-            tty = get_contents(self.ttyfile)
-            os.remove(self.ttyfile)
-            self.startbroker(tty)
 
     def stop(self):
         self.server.shutdown()
 
-class syell(QWidget):
 
-    def __init__(self):
-        QWidget.__init__(self)
-        self.outputterm = QTermWidget.QTermWidget(0, self)
-        self.outputterm.setTerminalFont(QFont('DejaVu Sans Mono', 18))
-        self.shellterm = QTermWidget.QTermWidget(0, self)
-        self.shellterm.setTerminalFont(QFont('DejaVu Sans', 18))
-        layout = QVBoxLayout(self)
-        layout.addWidget(self.outputterm)
-        layout.addWidget(self.shellterm)
+class EventHandler(pyinotify.ProcessEvent):
+    def __init__(self, ttyfile):
+        self.ttyfile = ttyfile
 
-    def startterminals(self):
-        self.process = QProcess(self)
+    def process_IN_CREATE(self, event):
+        global tty_device_file
+
+        if event.pathname.endswith(self.ttyfile):
+            # TODO pass this to the broker instead of using a global variable
+            tty_device_file = get_contents(self.ttyfile)
+            os.remove(self.ttyfile)
+
+class TargetTerminalWidget(QTermWidget.QTermWidget):
+    def __init__(self, parent):
+        super(QTermWidget.QTermWidget, self).__init__(0, parent)
+
+        self.setTerminalFont(QFont('DejaVu Sans Mono', 18))
+
         ttyfile = 'tty-%d.txt' % os.getpid()
 	if (os.path.exists(ttyfile)):
             os.remove(ttyfile)
@@ -76,26 +70,47 @@ class syell(QWidget):
         self.notifier.start()
         wm.add_watch('.', pyinotify.IN_CREATE, rec=True)
 
-        self.outputterm.setShellProgram('./detach')
-        self.outputterm.setArgs([ttyfile])
-        self.outputterm.startShellProgram()
+        self.setShellProgram('./detach')
+        self.setArgs([ttyfile])
+        self.startShellProgram()
+
+    def stop(self):
+        self.notifier.stop()
+
+class ShellTerminalWidget(QTermWidget.QTermWidget):
+    def __init__(self, parent):
+        super(QTermWidget.QTermWidget, self).__init__(0, parent)
 
         env = QProcessEnvironment.systemEnvironment()
         env.insert("LD_PRELOAD", "./overrideexecve.so")
         env.insert("TTY_BROKER_PORT", str(broker_port))
-        self.shellterm.setEnvironment(env.toStringList())
-        self.shellterm.startShellProgram()
+
+        self.setTerminalFont(QFont('DejaVu Sans', 18))
+        self.setEnvironment(env.toStringList())
+        self.startShellProgram()
+
+class syell(QWidget):
+
+    def __init__(self):
+        QWidget.__init__(self)
+
+        self.ttyBroker = TtyBroker()
+
+        self.outputterm = TargetTerminalWidget(self)
+        self.shellterm = ShellTerminalWidget(self)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.outputterm)
+        layout.addWidget(self.shellterm)
 
     def quit(self):
-        print('quitting')
-        self.ttyHandler.stop()
-        self.notifier.stop()
+        self.outputterm.stop()
+        self.ttyBroker.stop()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     main = syell()
     main.show()
-    main.startterminals()
     main.shellterm.connect(main.shellterm, SIGNAL('finished()'), main.quit)
     main.shellterm.connect(main.shellterm, SIGNAL('finished()'), app, SLOT('quit()'))
     sys.exit(app.exec_())
