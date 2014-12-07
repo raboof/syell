@@ -4,11 +4,10 @@
 import sys, os, time, pyinotify, signal, socket, threading, tempfile
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
+from PyQt4.QtNetwork import QTcpServer, QTcpSocket
 
 from PyQt4 import Qt
 import QTermWidget
-
-from SocketServer import BaseRequestHandler, TCPServer
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
@@ -18,29 +17,29 @@ def get_contents(filename):
     with file(filename) as f:
         return f.read()
 
-class TtyRequestHandler(BaseRequestHandler):
+class TtyBroker(QTcpServer):
+    def __init__(self):
+        super(QTcpServer, self).__init__()
+        self.listen()
+        self.connect(self, SIGNAL('newConnection()'), self.handle)
+
     def handle(self):
-        requestheader = self.request.recv(1)
+        socket = self.nextPendingConnection()
+        requestheader = socket.read(1)
         # TODO start a new terminal as needed, then wait until it's created
         # and return its tty device file
         response = tty_device_file
         responseheader = chr(len(response))
 
-        self.request.sendall(responseheader)
-        self.request.sendall(response)
-        self.request.close()
-
-class TtyBroker:
-    def __init__(self):
-        self.server = TCPServer(('',0), TtyRequestHandler)
-        thread = threading.Thread(target=self.server.serve_forever)
-        thread.start()
+        socket.write(responseheader)
+        socket.write(response)
+        socket.close()
 
     def port(self):
-        return self.server.server_address[1]
+        return self.serverPort()
 
     def stop(self):
-        self.server.shutdown()
+        self.close()
 
 class EventHandler(pyinotify.ProcessEvent):
     def __init__(self, ttyfile):
