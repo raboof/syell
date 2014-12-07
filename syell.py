@@ -57,6 +57,7 @@ class EventHandler(pyinotify.ProcessEvent):
 class TargetTerminalWidget(QTermWidget.QTermWidget):
     def __init__(self, parent):
         super(QTermWidget.QTermWidget, self).__init__(0, parent)
+        self.parent = parent
 
         self.setTerminalFont(QFont('DejaVu Sans Mono', 18))
 
@@ -77,7 +78,7 @@ class TargetTerminalWidget(QTermWidget.QTermWidget):
 
     def active(self):
         self.setMonitorActivity(1)
-        self.setFocus()
+        self.parent.requestOutputFocus(self)
 
     def stop(self):
         self.notifier.stop()
@@ -85,6 +86,7 @@ class TargetTerminalWidget(QTermWidget.QTermWidget):
 class ShellTerminalWidget(QTermWidget.QTermWidget):
     def __init__(self, broker_port, parent):
         super(QTermWidget.QTermWidget, self).__init__(0, parent)
+        self.parent = parent
 
         env = QProcessEnvironment.systemEnvironment()
         env.insert("LD_PRELOAD", "./overrideexecve.so")
@@ -99,13 +101,17 @@ class ShellTerminalWidget(QTermWidget.QTermWidget):
 
     def active(self):
         self.setMonitorActivity(1)
-        self.setFocus()
+        self.parent.requestShellFocus(self)
 
 class syell(QWidget):
 
     def __init__(self):
         QWidget.__init__(self)
 
+        self.waitingfornextshell = True
+        self.outputting = False
+
+        self.doneOutputting = False
         self.ttyBroker = TtyBroker()
 
         self.outputterm = TargetTerminalWidget(self)
@@ -114,6 +120,20 @@ class syell(QWidget):
         layout = QVBoxLayout(self)
         layout.addWidget(self.outputterm)
         layout.addWidget(self.shellterm)
+
+    def requestOutputFocus(self, widget):
+        if (not self.outputting):
+            widget.setFocus()
+            self.outputting = True
+            self.waitingfornextshell = True
+
+    def requestShellFocus(self, widget):
+        if (self.waitingfornextshell):
+            self.waitingfornextshell = False
+        else:
+            self.outputting = False
+
+        widget.setFocus()
 
     def quit(self):
         self.outputterm.stop()
