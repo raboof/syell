@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #-*- coding:utf-8 -*-
 
-import sys, os, time, pyinotify, signal, socket, threading
+import sys, os, time, pyinotify, signal, socket, threading, tempfile
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 
@@ -46,7 +46,7 @@ class EventHandler(pyinotify.ProcessEvent):
     def __init__(self, ttyfile):
         self.ttyfile = ttyfile
 
-    def process_IN_CREATE(self, event):
+    def process_IN_CLOSE_WRITE(self, event):
         global tty_device_file
 
         if event.pathname.endswith(self.ttyfile):
@@ -60,15 +60,13 @@ class TargetTerminalWidget(QTermWidget.QTermWidget):
 
         self.setTerminalFont(QFont('DejaVu Sans Mono', 18))
 
-        ttyfile = 'tty-%d.txt' % os.getpid()
-	if (os.path.exists(ttyfile)):
-            os.remove(ttyfile)
+        ttyfile = tempfile.NamedTemporaryFile(dir='.',delete=False).name
 
         wm = pyinotify.WatchManager()
         self.ttyHandler = EventHandler(ttyfile)
         self.notifier = pyinotify.ThreadedNotifier(wm, self.ttyHandler)
         self.notifier.start()
-        wm.add_watch('.', pyinotify.IN_CREATE, rec=True)
+        wm.add_watch('.', pyinotify.IN_CLOSE_WRITE, rec=True)
 
         self.setShellProgram('./detach')
         self.setArgs([ttyfile])
