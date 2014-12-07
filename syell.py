@@ -12,8 +12,6 @@ from SocketServer import BaseRequestHandler, TCPServer
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
-# TODO discover a random free port to listen on
-broker_port = 12351
 tty_device_file = "uninitialized"
 
 def get_contents(filename):
@@ -34,13 +32,15 @@ class TtyRequestHandler(BaseRequestHandler):
 
 class TtyBroker:
     def __init__(self):
-        self.server = TCPServer(('',broker_port), TtyRequestHandler)
+        self.server = TCPServer(('',0), TtyRequestHandler)
         thread = threading.Thread(target=self.server.serve_forever)
         thread.start()
 
+    def port(self):
+        return self.server.server_address[1]
+
     def stop(self):
         self.server.shutdown()
-
 
 class EventHandler(pyinotify.ProcessEvent):
     def __init__(self, ttyfile):
@@ -78,7 +78,7 @@ class TargetTerminalWidget(QTermWidget.QTermWidget):
         self.notifier.stop()
 
 class ShellTerminalWidget(QTermWidget.QTermWidget):
-    def __init__(self, parent):
+    def __init__(self, broker_port, parent):
         super(QTermWidget.QTermWidget, self).__init__(0, parent)
 
         env = QProcessEnvironment.systemEnvironment()
@@ -97,7 +97,7 @@ class syell(QWidget):
         self.ttyBroker = TtyBroker()
 
         self.outputterm = TargetTerminalWidget(self)
-        self.shellterm = ShellTerminalWidget(self)
+        self.shellterm = ShellTerminalWidget(self.ttyBroker.port(), self)
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.outputterm)
