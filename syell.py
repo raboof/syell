@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #-*- coding:utf-8 -*-
 
-import sys, os, time, pyinotify, signal, socket, threading, tempfile
+import sys, os, time, signal, socket, threading, tempfile
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 from PyQt4.QtNetwork import QTcpServer, QTcpSocket
@@ -11,6 +11,7 @@ import QTermWidget
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
+path = os.path.dirname(os.path.realpath(__file__))
 tty_device_file = "uninitialized"
 
 def get_contents(filename):
@@ -41,18 +42,6 @@ class TtyBroker(QTcpServer):
     def stop(self):
         self.close()
 
-class EventHandler(pyinotify.ProcessEvent):
-    def __init__(self, ttyfile):
-        self.ttyfile = ttyfile
-
-    def process_IN_CLOSE_WRITE(self, event):
-        global tty_device_file
-
-        if event.pathname.endswith(self.ttyfile):
-            # TODO pass this to the broker instead of using a global variable
-            tty_device_file = get_contents(self.ttyfile)
-            os.remove(self.ttyfile)
-
 class TargetTerminalWidget(QTermWidget.QTermWidget):
     def __init__(self, parent):
         super(QTermWidget.QTermWidget, self).__init__(0, parent)
@@ -60,16 +49,14 @@ class TargetTerminalWidget(QTermWidget.QTermWidget):
 
         self.setTerminalFont(QFont('DejaVu Sans Mono', 18))
 
-        ttyfile = tempfile.NamedTemporaryFile(dir='.',delete=False).name
+        self.ttyfile = tempfile.NamedTemporaryFile(delete=False).name
 
-        wm = pyinotify.WatchManager()
-        self.ttyHandler = EventHandler(ttyfile)
-        self.notifier = pyinotify.ThreadedNotifier(wm, self.ttyHandler)
-        self.notifier.start()
-        wm.add_watch('.', pyinotify.IN_CLOSE_WRITE, rec=True)
+        self.wm = QFileSystemWatcher(self)
+        self.wm.addPath(self.ttyfile)
+        self.wm.connect(self.wm, SIGNAL('fileChanged(QString)'), self.ttyStarted)
 
-        self.setShellProgram('./detach')
-        self.setArgs([ttyfile])
+        self.setShellProgram(path + '/detach')
+        self.setArgs([self.ttyfile])
         self.startShellProgram()
 
         self.setMonitorActivity(1)
@@ -79,8 +66,12 @@ class TargetTerminalWidget(QTermWidget.QTermWidget):
         self.setMonitorActivity(1)
         self.parent.requestOutputFocus(self)
 
-    def stop(self):
-        self.notifier.stop()
+    def ttyStarted(self, event):
+        global tty_device_file
+        self.wm.disconnect(self.wm, SIGNAL('fileChanged(QString)'), self.ttyStarted)
+
+        tty_device_file = get_contents(self.ttyfile)
+        os.remove(self.ttyfile)
 
 class ShellTerminalWidget(QTermWidget.QTermWidget):
     def __init__(self, broker_port, parent):
@@ -88,7 +79,7 @@ class ShellTerminalWidget(QTermWidget.QTermWidget):
         self.parent = parent
 
         env = QProcessEnvironment.systemEnvironment()
-        env.insert("LD_PRELOAD", "./overrideexecve.so")
+        env.insert("LD_PRELOAD",  path + "/overrideexecve.so")
         env.insert("TTY_BROKER_PORT", str(broker_port))
 
         self.setTerminalFont(QFont('DejaVu Sans', 18))
@@ -135,7 +126,6 @@ class syell(QWidget):
         widget.setFocus()
 
     def quit(self):
-        self.outputterm.stop()
         self.ttyBroker.stop()
 
 if __name__ == "__main__":
