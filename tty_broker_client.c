@@ -46,10 +46,25 @@ int connect_to_broker(int port) {
 
 #define BUFSIZE 1024
 
+int get_broker_port() {
+  char * port = getenv("TTY_BROKER_PORT");
+
+  if (port == NULL)
+    return -1;
+  else
+    return atoi(port);
+}
+
 char * get_pty_file_from_broker() {
-  int port = atoi(getenv("TTY_BROKER_PORT"));
-  int sock = connect_to_broker(port);
+  int port = get_broker_port();
+  int sock = -1;
   unsigned char responseLength = -1;
+
+  if (port < 0) {
+    return NULL;
+  }
+
+  sock = connect_to_broker(port);
   char buf[BUFSIZE];
 
   if (sock < 0) {
@@ -96,8 +111,12 @@ char * get_pty_file() {
   char * ptyfile = get_pty_file_from_environment();
   if (ptyfile != NULL)
     return ptyfile;
-  else
-    return get_pty_file_from_broker();
+
+  ptyfile = get_pty_file_from_environment();
+  if (ptyfile != NULL)
+    return ptyfile;
+
+  return NULL;
 }
 
 int target_pty() {
