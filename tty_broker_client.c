@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <errno.h>
 
 #include <string.h>
 
@@ -48,7 +49,7 @@ int connect_to_broker(int port) {
 char * get_pty_file_from_broker() {
   int port = atoi(getenv("TTY_BROKER_PORT"));
   int sock = connect_to_broker(port);
-  unsigned char responseLength;
+  unsigned char responseLength = -1;
   char buf[BUFSIZE];
 
   if (sock < 0) {
@@ -56,13 +57,20 @@ char * get_pty_file_from_broker() {
   }
 
   if (send(sock, "x", 1, 0) < 0) {
-    fprintf(stderr, "Error sending command header\n");
+    perror("Error sending command header");
     goto error;
   }
 
-  if (read(sock, &responseLength, 1) < 1) {
-    fprintf(stderr, "Error receiving response header\n");
-    goto error;
+  if (read(sock, &responseLength, 1) < 0) {
+    if (errno == EINTR)
+      // This can succeed the second time - if not, give up after all.
+      if (read(sock, &responseLength, 1) < 0) {
+        perror("Error receiving response header");
+        goto error;
+      }
+  }
+  if (responseLength == -1) {
+    fprintf(stderr, "Stream end encountered while trying to read response header\n");
   }
   if (responseLength > BUFSIZE + 1) {
     fprintf(stderr, "Response too large: %d\n", responseLength);
