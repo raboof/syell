@@ -12,29 +12,37 @@ import QTermWidget
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
 path = os.path.dirname(os.path.realpath(__file__))
-tty_device_file = "uninitialized"
 
 def get_contents(filename):
     with file(filename) as f:
         return f.read()
 
 class TtyBroker(QTcpServer):
-    def __init__(self):
+    def __init__(self, termHolder):
         super(QTcpServer, self).__init__()
+        self.termHolder = termHolder
+        self.tty_device_file = None
         self.listen()
         self.connect(self, SIGNAL('newConnection()'), self.handle)
 
     def handle(self):
         socket = self.nextPendingConnection()
         requestheader = socket.read(1)
-        # TODO start a new terminal as needed, then wait until it's created
-        # and return its tty device file
-        response = tty_device_file
-        responseheader = chr(len(response))
 
-        socket.write(responseheader)
-        socket.write(response)
-        socket.close()
+        def respond_with(tty_device_file):
+            self.tty_device_file = tty_device_file
+            response = tty_device_file
+
+            responseheader = chr(len(response))
+
+            socket.write(responseheader)
+            socket.write(response)
+            socket.close()
+
+        if (self.tty_device_file == None):
+            outputterm = TargetTerminalWidget(self.termHolder, respond_with)
+        else:
+            respond_with(self.tty_device_file)
 
     def port(self):
         return self.serverPort()
@@ -43,13 +51,14 @@ class TtyBroker(QTcpServer):
         self.close()
 
 class TargetTerminalWidget(QTermWidget.QTermWidget):
-    def __init__(self, parent):
+    def __init__(self, parent, tty_created_cb):
         super(QTermWidget.QTermWidget, self).__init__(0, parent)
         self.parent = parent
 
         self.setTerminalFont(QFont('DejaVu Sans Mono', 18))
 
         self.ttyfile = tempfile.NamedTemporaryFile(delete=False).name
+        self.tty_created = tty_created_cb
 
         self.wm = QFileSystemWatcher(self)
         self.wm.addPath(self.ttyfile)
@@ -62,16 +71,20 @@ class TargetTerminalWidget(QTermWidget.QTermWidget):
         self.setMonitorActivity(1)
         self.connect(self, SIGNAL('activity()'), self.active)
 
+        self.setVisible(False)
+        parent.addOutput(self)
+
     def active(self):
+        self.setVisible(True)
         self.setMonitorActivity(1)
         self.parent.requestOutputFocus(self)
 
     def ttyStarted(self, event):
-        global tty_device_file
         self.wm.disconnect(self.wm, SIGNAL('fileChanged(QString)'), self.ttyStarted)
 
         tty_device_file = get_contents(self.ttyfile)
         os.remove(self.ttyfile)
+        self.tty_created(tty_device_file)
 
 class ShellTerminalWidget(QTermWidget.QTermWidget):
     def __init__(self, broker_port, parent):
@@ -102,14 +115,15 @@ class syell(QWidget):
         self.outputting = False
 
         self.doneOutputting = False
-        self.ttyBroker = TtyBroker()
+        self.ttyBroker = TtyBroker(self)
 
-        self.outputterm = TargetTerminalWidget(self)
         self.shellterm = ShellTerminalWidget(self.ttyBroker.port(), self)
 
-        layout = QVBoxLayout(self)
-        layout.addWidget(self.outputterm)
-        layout.addWidget(self.shellterm)
+        self.layout = QVBoxLayout(self)
+        self.layout.addWidget(self.shellterm)
+
+    def addOutput(self, widget):
+        self.layout.addWidget(widget)
 
     def requestOutputFocus(self, widget):
         if (not self.outputting):
